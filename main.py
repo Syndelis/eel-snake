@@ -17,6 +17,7 @@ import socket
 from threading import Thread
 from pickle import dumps, loads
 from time import sleep
+from json import load as json_load
 # ------------------------------------------------------------------------------
 """
 Global constants
@@ -277,9 +278,18 @@ for x in range(0, WIDTH, SQ):
     lines.append(l)
 
 
-def gameSingRandomApple():
+def gameRandomApple(snakes):
     global apple
-    apple.pos = (randint(0, WIDTH/SQ-1) * SQ, randint(0, HEIGHT/SQ-1) * SQ)
+
+    coincide = True
+
+    while coincide:
+        apple.pos = (randint(0, WIDTH/SQ-1) * SQ, randint(0, HEIGHT/SQ-1) * SQ)
+
+        coincide = False
+        for snake in snakes:
+            for body in snake:
+                if body and body.pos == apple.pos: coincide = True
 
 
 def gameSingSetup(eel):
@@ -312,7 +322,7 @@ def gameSing(eel):
         player.step(minv, maxv)
         if player.head.pos == apple.pos:
             player.grow()
-            gameSingRandomApple()
+            gameRandomApple([player])
 
         timer = maxtimer
 
@@ -358,7 +368,7 @@ def gameHostListen():
 
         player_list.append([])
         players.append(
-            Snake(randint(3, WIDTH/SQ - 5), randint(0, HEIGHT/SQ - 1) - .5)
+            Snake(WIDTH/SQ, randint(0, HEIGHT/SQ - 1) - .5)
         )
         print(f"New snake at ({players[-1].head.pos})")
         players[-1].setScheme(up=b'W', down=b'S', left=b'A', right=b'D')
@@ -418,7 +428,7 @@ def gameHost(eel):
             p.step(minv, maxv, others=players)
             if p.head.pos == apple.pos:
                 p.grow()
-                gameSingRandomApple()
+                gameRandomApple(players)
 
             player_list[i] = []
             for body in p:
@@ -466,11 +476,31 @@ def fromPickle(pick):
     if len(pick) and len(players): apple.pos = pick[-1]
 
 
+default_connection = {
+    "host": "",
+    "port": 7777,
+    "direct": ""
+}
+
 def gameClientSetup():
     global sock, setup, players, apple
 
+    config = default_connection
+
     sock = socket.socket()
-    sock.connect(('', PORT))
+    try:
+        sock.connect((config["host"], config["port"]))
+
+    except (socket.gaierror, socket.error, ConnectionRefusedError):
+        try:
+            sock.connect((config["direct"], config["port"]))
+
+        except:
+            print("Can't establish connection with host.")
+            exit(1)
+
+    # sock.connect(('', PORT))
+    
 
     apple = Rectangle(0, 0, width=SQ, height=SQ, fill=True)
     apple.setColor(200, 0, 0)
