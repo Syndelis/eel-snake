@@ -4,7 +4,7 @@ Imports
 
 # Engine imports
 from eel import Eel, keyPressed, Canvas, mousePressed
-from figure import Rectangle, Line, Text, Circle
+from figure import Rectangle, Line, Font, Circle
 from shader import Shader
 
 # General imports
@@ -221,20 +221,25 @@ menu_str = (
     b"Multiplayer - Host",
     b"Multiplayer - Join"
 )
-menu = [
-    (
-        Rectangle(20 - 10, 100 + 60*i - 40, width=600, height=50, fill=True),
-        Text(20, 100 + 60*i, text=v, font=b"Ubuntu-R.ttf")
-    ) for i, v in enumerate(menu_str)
-]
+
+global menu, font
+font = None
+menu = []
+# menu = [
+#     (
+#         Rectangle(20 - 10, 100 + 60*i - 40, width=600, height=50, fill=True),
+#         font.text(20, 100 + 60*i, v)# Text(20, 100 + 60*i, text=v, font=b"Ubuntu-R.ttf")
+#     ) for i, v in enumerate(menu_str)
+# ]
+
+# for item in menu:
+#     item[0].setColor(20, 20, 20)
 
 menu_rect = Rectangle(0, 0, width=600, height=50)
 menu_rect.setColor(150, 150, 30)
 
 menu_mouse = Circle(0, 0, radius=10)
 
-for item in menu:
-    item[0].setColor(20, 20, 20)
 
 def gameMenu(eel):
     global current_state
@@ -487,6 +492,12 @@ def gameClientSetup():
 
     config = default_connection
 
+    try:
+        with open("connection.json", "r") as f:
+            config = json_load(f)
+
+    except: pass
+
     sock = socket.socket()
     try:
         sock.connect((config["host"], config["port"]))
@@ -557,7 +568,7 @@ canvases = None
 
 @game.load
 def gameLoad(eel):
-    global current_state, setup, shaders, canvases
+    global current_state, setup, shaders, canvases, font
 
     current_state = GameState.MENU
     setup = False
@@ -574,6 +585,20 @@ def gameLoad(eel):
 
     if canvases is None:
         canvases = [Canvas(*eel.dimensions) for i in range(2)]
+
+    
+    if font is None:
+
+        font = Font("Ubuntu-R.ttf")
+
+        for i, v in enumerate(menu_str):
+            menu.append((
+                Rectangle(20 - 10, 100 + 60*i - 40, width=600, height=50, fill=True),
+                font.text(20, 100 + 60*i, v)
+            ))
+
+        for item in menu:
+            item[0].setColor(20, 20, 20)
 
 
 @game.draw
@@ -599,6 +624,7 @@ def applyShader(eel):
         c = (i+1)&1
         canvases[c].drawTo(eel)
         for c in canvases: c.clear()
+
 
 game.run()
 if listen_thread is not None:pass
