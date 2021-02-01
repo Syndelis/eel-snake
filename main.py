@@ -3,7 +3,7 @@ Imports
 """
 
 # Engine imports
-from eel import Eel, keyPressed, Canvas, mousePressed
+from eel import Eel, keyPressed, Canvas, mousePressed, getText
 from figure import Rectangle, Line, Font, Circle
 from shader import Shader
 
@@ -18,6 +18,7 @@ from threading import Thread
 from pickle import dumps, loads
 from time import sleep
 from json import load as json_load
+from ctypes import c_uint64
 # ------------------------------------------------------------------------------
 """
 Global constants
@@ -30,6 +31,9 @@ VSYNC = True
 # Multiplayer
 PORT = 7777
 MAXPLAYERS = 8
+
+# Debug
+FORCEDEFAULTCONN = True
 
 # Game state
 class GameState(Enum):
@@ -423,10 +427,16 @@ def gameHostSetup():
 
 def gameHost(eel):
     global sock, setup, timer, maxtimer, apple, players, clients, player_list
-    if not setup: gameHostSetup()
+    if not setup:
+        gameHostSetup()
+        # eel.close()
+
+    # print("Processing timer")
 
     timer -= 1
     if timer <= 0:
+
+        # print("Update time")
 
         for i, p in enumerate(players):
 
@@ -442,14 +452,19 @@ def gameHost(eel):
 
         timer = maxtimer
 
+    # print("Sending data to peers")
+
     d = getPickle()
-    for client in clients: client.send(d)
+    for client in clients:
+        client.send(d)
+
+    # print("All data sent")
 
 
 def fromPickle(pick):
     global players, apple
 
-    print(pick)
+    # print(pick)
 
     # if len(pick)-1 > len(players):
     #     players.append(Snake(*pick[-2][0], size=len(pick[-2])))
@@ -487,16 +502,22 @@ default_connection = {
     "direct": ""
 }
 
+global iptext
+iptext = None
+
 def gameClientSetup():
     global sock, setup, players, apple
 
     config = default_connection
 
     try:
+        assert not FORCEDEFAULTCONN
         with open("connection.json", "r") as f:
             config = json_load(f)
 
     except: pass
+
+    iptext.text = b''
 
     sock = socket.socket()
     try:
@@ -516,12 +537,18 @@ def gameClientSetup():
     apple = Rectangle(0, 0, width=SQ, height=SQ, fill=True)
     apple.setColor(200, 0, 0)
 
+    print("Connection established. Receiving first pickle...")
+
     p = loads(sock.recv(4096))
-    print(p)
-    print([len(pl) for pl in p])
+
+    print("Package received and unpickled. Interpreting it...")
+    # print(p)
+    # print([len(pl) for pl in p])
     players = [Snake(0, 0, size=len(pl)) for pl in p]
 
     fromPickle(p)
+
+    print("Package interpreted successfully. Setup is complete")
 
     setup = True
 
@@ -532,6 +559,7 @@ def gameClient(eel):
     global setup, players, sock, apple
     if not setup: gameClientSetup()
 
+    # print("Ready to read input and send to masterserver")
     sent = False
 
     for i in inp:
@@ -541,8 +569,16 @@ def gameClient(eel):
             break
 
     if not sent: sock.send(b'')
+    # print("Input successfully sent. Now waiting for response...")
 
-    fromPickle(loads(sock.recv(4096)))
+    # test this bad boy
+    data = sock.recv(4096)
+    # print(data)
+
+    # print("Response arrived. Time for unpickling and interpretation...")
+    # print(data)
+    fromPickle(loads(data))
+    # fromPickle(loads(sock.recv(4096)))
 
     for player in players: player.drawTo(canvases[0])
     apple.drawTo(canvases[0])
@@ -568,7 +604,7 @@ canvases = None
 
 @game.load
 def gameLoad(eel):
-    global current_state, setup, shaders, canvases, font
+    global current_state, setup, shaders, canvases, font, iptext
 
     current_state = GameState.MENU
     setup = False
@@ -600,6 +636,8 @@ def gameLoad(eel):
         for item in menu:
             item[0].setColor(20, 20, 20)
 
+        iptext = font.text(20, 160, b'')
+
 
 @game.draw
 def mainLoop(eel):
@@ -612,19 +650,20 @@ def mainLoop(eel):
 def applyShader(eel):
     global current_state
 
-    if current_state != GameState.HOST:
+    for l in lines: l.drawTo(canvases[0])
 
-        for l in lines: l.drawTo(canvases[0])
+    for i, sh in enumerate(shaders):
+        with sh:
+            c = i&1
+            canvases[c].drawTo(canvases[1-c])
 
-        for i, sh in enumerate(shaders):
-            with sh:
-                c = i&1
-                canvases[c].drawTo(canvases[1-c])
-
-        c = (i+1)&1
-        canvases[c].drawTo(eel)
-        for c in canvases: c.clear()
+    c = (i+1)&1
+    canvases[c].drawTo(eel)
+    for c in canvases: c.clear()
 
 
 game.run()
 if listen_thread is not None:pass
+
+# while current_state is GameState.HOST:
+#     gameHost(None)
